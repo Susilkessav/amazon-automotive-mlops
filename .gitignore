@@ -1,0 +1,55 @@
+temp/
+venv/
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual env
+.venv/
+env/
+venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data folders (raw, processed)
+data/raw/
+data/metadata/
+data/reviews/
+data/processed/
+chroma_db
+chroma_db_OG
+mlruns/
+logs/
+models/
+# Models, embeddings, indices
+models/
+models/chatbot/
+faiss.index  
+contexts.pkl
+*.joblib
+
+# Logs, checkpoints
+*.log
+logs/
+.airflow/
+airflow/airflow.db
+
+# Docker
+docker-compose.override.yml
+*.tar
+*.tar.gz
+
+# OS & editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Secrets & config
+.env
+.env.*

@@ -1,0 +1,40 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# 1) Ignore everything by default
+# ─────────────────────────────────────────────────────────────────────────────
+*
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 2) Whitelist your project files & folders
+# ─────────────────────────────────────────────────────────────────────────────
+# Docker files
+!Dockerfile.*
+!docker-compose.yml
+
+# Requirements
+!requirements.txt
+!requirements_dashboard.txt
+
+# Flask service
+!app.py
+!ingest_metadata.py
+!preprocess_dataset_cli.py
+
+# Scripts & DAGs
+!scripts/
+!scripts/train_model.py
+!dags/
+
+# Web UI assets
+!static/
+!templates/
+
+# ChromaDB store
+!chroma_db/
+
+# Models
+!models/
+!models/model.pkl
+
+# Airflow files
+!airflow.cfg
+!airflow.db

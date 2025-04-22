@@ -1,0 +1,38 @@
+# Dockerfile.chatbot
+
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# 1) System deps for faiss-cpu, transformers, etc.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential git libopenblas-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# 2) Copy & install Python deps, filtering out pywin32
+COPY requirements.txt .
+RUN sed '/pywin32/d' requirements.txt > reqs-filtered.txt \
+    && pip install --no-cache-dir -r reqs-filtered.txt \
+    && pip install --no-cache-dir \
+         sentence-transformers \
+         faiss-cpu \
+         transformers \
+         flask \
+         requests
+
+
+# 3) Copy your app code & assets
+COPY chroma_db        ./chroma_db
+COPY static           ./static
+COPY templates        ./templates
+COPY app.py           ./app.py
+COPY ingest_metadata.py ./ingest_metadata.py
+
+# 4) Expose and run on port 5001
+EXPOSE 5001
+ENV FLASK_APP=app.py \
+    FLASK_RUN_HOST=0.0.0.0 \
+    FLASK_RUN_PORT=5001
+
+
+CMD ["python", "app.py"]

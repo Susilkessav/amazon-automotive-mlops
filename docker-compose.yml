@@ -1,0 +1,56 @@
+services:
+
+  # ───────────────────────────────────────────────────────────────
+  # 1) Airflow (webserver + scheduler in one container)
+  # ───────────────────────────────────────────────────────────────
+  airflow:
+    image: apache/airflow:2.6.3
+    restart: always
+    environment:
+      AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
+      AIRFLOW__CORE__FERNET_KEY: '21UzSN0cdEdLqY_zymCQy8aWKQfgoP_TP4b2y41OKuQ='
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./scripts:/opt/airflow/scripts
+      - ./data:/opt/airflow/data
+      - ./requirements_airflow.txt:/opt/airflow/requirements_airflow.txt:ro
+    ports:
+      - "8080:8080"
+    command: >
+      bash -c "
+        # 1) install only your DAG deps under the airflow user
+        pip install --user -r /opt/airflow/requirements_airflow.txt &&
+
+        # 2) initialize the DB and create admin user (idempotent)
+        airflow db init &&
+        airflow users create \
+          --username admin --firstname Admin --lastname User \
+          --role Admin --email admin@example.com \
+          --password admin || true &&
+
+        # 3) launch scheduler & webserver
+        exec airflow scheduler & exec airflow webserver
+      "
+
+
+  # ───────────────────────────────────────────────────────────────
+  # 3) Chatbot Service
+  # ───────────────────────────────────────────────────────────────
+  ml_chatbot:
+    build:
+      context: .
+      dockerfile: Dockerfile.chatbot
+    env_file:
+      - .env
+    volumes:
+      - ./models/chatbot:/app/models/chatbot
+      - ./scripts:/app/scripts
+      - ./data:/app/data:ro
+    ports:
+      - "5001:5001"
+
+
+
