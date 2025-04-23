@@ -95,7 +95,7 @@ While real-time evaluation is plumbed through **Langfuse** (logs every RAG call)
   3. **Deploy** on GKE / Compute Engine  
   4. **On PR**: spin up ephemeral data-pipeline node, auto-destroy on close  
 
-> Future GitHub Actions workﬂows can live in `.github/workflows/`.
+![image](https://github.com/user-attachments/assets/41f225ad-c860-4d73-b23a-f249d3be47a8)
 
 ---
 
