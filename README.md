@@ -15,7 +15,6 @@ The system is organized into **five** logical layers—each mapped to a folder o
 | **3. Model Evaluation**    | (Future) Log-extraction & RAG-as-a-judge scripts & alerts*    |
 | **4. CI/CD & Deployment**  | `Dockerfile.chatbot`, `docker-compose.yml`                   |
 | **5. Monitoring & Logging**| Langfuse integration in `webserver_config.py`,<br>GCP Monitoring hooks |
-![ChatGPT Image Apr 22, 2025, 09_02_05 PM](https://github.com/user-attachments/assets/ad357fa0-636c-4491-9b3a-c00b32a5ce30)
 
 > *_Note: The evaluation layer is scaffolded via Langfuse logs; you can plug in RAG-as-a-judge jobs in `scripts/` as needed._
 
@@ -41,6 +40,7 @@ Orchestrated by **Airflow DAGs** in `dags/` (requires `airflow.cfg`, `airflow.db
 
 5. **(Optional) Data Bias Report**  
    - Hook in your own report generator in the DAG  
+![ChatGPT Image Apr 22, 2025, 09_02_05 PM](https://github.com/user-attachments/assets/ad357fa0-636c-4491-9b3a-c00b32a5ce30)
 
 ---
 
