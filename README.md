@@ -1,178 +1,174 @@
-# Amazon Automotive MLOps
+# End-to-End RAG-Based Q&A System for Amazon Automotive Reviews
 
-A containerized end‑to‑end MLOps project for Amazon automotive reviews, featuring:
-
-- **Data ingestion & preprocessing** (HuggingFace `datasets`, pandas)  
-- **Model training & evaluation** (scikit‑learn, RandomForest)  
-- **Embedding & chatbot pipelines** (Sentence‑Transformers, FAISS, OpenAI)  
-- **Streamlit**‑powered **ML API** and **Chatbot UI**  
-- **Airflow** orchestration of all pipelines  
-- **Docker Compose** for easy local/dev setup  
+An MLOps pipeline that ingests raw Amazon automotive review data, preprocesses & embeds it, serves a Retrieval-Augmented Generation (RAG) API + dashboard, and provides hooks for automated evaluation, CI/CD deployment, and monitoring.
 
 ---
 
-## Table of Contents
+## Architecture Overview
 
-1. [Features](#features)  
-2. [Repository Structure](#repository-structure)  
-3. [Prerequisites](#prerequisites)  
-4. [Local Development](#local-development)  
-5. [Docker‑Compose Full Stack](#docker-compose-full-stack)  
-6. [Workflow Overview](#workflow-overview)  
-7. [Contributing](#contributing)  
-8. [License](#license)  
+The system is organized into **five** logical layers—each mapped to a folder or file in this repo:
 
----
+| Layer                      | Components in This Repo                                      |
+|----------------------------|---------------------------------------------------------------|
+| **1. Data Ingestion**      | `dags/` (Airflow), `ingest_metadata.py`, `ingest_reviews.py`,<br>`dataset_processor.py` / `process_dataset_cli.py` |
+| **2. Model Building**      | `app.py` (Flask API), `dashboard.py` (Flask UI),<br>`static/` + `templates/` |
+| **3. Model Evaluation**    | (Future) Log-extraction & RAG-as-a-judge scripts & alerts*    |
+| **4. CI/CD & Deployment**  | `Dockerfile.chatbot`, `docker-compose.yml`                   |
+| **5. Monitoring & Logging**| Langfuse integration in `webserver_config.py`,<br>GCP Monitoring hooks |
 
-## Features
-
-1. **Data Pipeline**  
-   - Ingest raw reviews & metadata  
-   - Join, clean & produce train/val/test splits  
-
-2. **Model Pipeline**  
-   - TF‑IDF + RandomForest regression  
-   - Train/test evaluation, artifact save  
-
-3. **Embedding + Chatbot Pipeline**  
-   - Precompute sentence embeddings (all‑MiniLM‑L6‑v2)  
-   - Build FAISS index for retrieval  
-   - Flask Chat API with context‑grounded answers  
-
-4. **ML API** (Streamlit)  
-   - Predictive app for rating regression on port 8501  
-
-5. **Chatbot UI** (Streamlit)  
-   - Conversational frontend on port 8502  
-   - Backend API on port 5001  
-
-6. **Airflow Orchestration**  
-   - DAGs for data, model, deploy & chatbot pipelines  
-   - Fully automated end‑to‑end flow  
-
-7. **Dockerized**  
-   - Single command bring‑up of the full stack  
+> *_Note: The evaluation layer is scaffolded via Langfuse logs; you can plug in RAG-as-a-judge jobs in `scripts/` as needed._
 
 ---
 
-## Repository Structure
+## 1. Data Ingestion
+
+Orchestrated by **Airflow DAGs** in `dags/` (requires `airflow.cfg`, `airflow.db`).
+
+1. **Download / Unzip**  
+   - Ingest raw CSV / JSON from S3 or local  
+   - See `ingest_metadata.py`, `ingest_reviews.py`  
+
+2. **Schema Validation & Cleaning**  
+   - `dataset_processor.validate_and_clean()`  
+
+3. **Data Transformation**  
+   - Normalize fields, merge reviews + metadata  
+
+4. **Vector Embedding Generation**  
+   - MPNet via HuggingFace (`all-MiniLM-L6-v2`) in `dataset_processor.py`  
+   - Outputs embeddings to local Chroma store (or GCS when `CHROMA_DB_DIR` points to a GCS bucket)  
+
+5. **(Optional) Data Bias Report**  
+   - Hook in your own report generator in the DAG  
+
+---
+
+## 2. Model Building
+
+Exposed as a **Flask** microservice + dashboard:
+
+- **`app.py`**  
+  - `/chat` endpoint for RAG Q&A  
+  - **Query Flow**:  
+    1. UI (`dashboard.py`) → User query  
+    2. **Moderation** via OpenAI →  
+    3. **RAG Retriever** (Chroma) →  
+    4. **LLM** (OpenAI) →  
+    5. **Langfuse** logs the request/response →  
+    6. JSON response → UI  
+
+- **`dashboard.py`**  
+  - Interactive UI for questions & visualizing results  
+  - Templates in `templates/`, static assets in `static/`
+
+- **Configuration**  
+  - All API keys, GCS paths, Langfuse DSN → `webserver_config.py` / `.env`
+
+---
+
+## 3. Model Evaluation
+
+While real-time evaluation is plumbed through **Langfuse** (logs every RAG call), you can:
+
+1. **Extract logs** (Langfuse SDK in `scripts/`)  
+2. **Run RAG-as-a-judge** (LLM-based metrics)  
+3. **Compare** against thresholds  
+4. **Trigger** email alerts when performance dips  
+
+> Starter scripts: `scripts/extract_logs.py`, `scripts/evaluate_rag_as_judge.py`
+
+---
+
+## 4. CI/CD & Deployment
+
+- **Local / Dev**  
+  ```bash
+  docker-compose up --build -d
+  ```
+  - **Airflow** + **Flask Chatbot** spin up via `docker-compose.yml`  
+  - Chatbot image built by `Dockerfile.chatbot`
+
+- **Production Blueprint**  
+  1. **GitHub →** push to `main`  
+  2. **Build & Push** container to Artifact Registry  
+  3. **Deploy** on GKE / Compute Engine  
+  4. **On PR**: spin up ephemeral data-pipeline node, auto-destroy on close  
+
+> Future GitHub Actions workﬂows can live in `.github/workflows/`.
+
+---
+
+## 5. Monitoring & Logging
+
+- **Langfuse**  
+  - Tracks every API request/response  
+  - View error rates, latencies, custom tags  
+
+- **GCP Cloud Monitoring**  
+  - Resource utilization dashboards (CPU, Memory)  
+  - Alerting rules for above-threshold metrics → Email notifications  
+
+---
+
+## Project Structure
 
 ```
 .
-├── dags/                     # Airflow DAG definitions
-│   ├── data_pipeline.py
-│   ├── model_pipeline.py
-│   └── chatbot_pipeline.py
-├── data/                     # Data mounts (raw, processed)
-│   ├── reviews/
-│   └── metadata/
-├── models/                   # Saved models & indices
-│   ├── model.joblib
-│   └── chatbot/
-│       ├── faiss.index
-│       └── contexts.pkl
-├── scripts/                  # ETL, training, embedding, ingestion
-│   ├── ingest_reviews.py
-│   ├── ingest_metadata.py
-│   ├── preprocess.py
-│   ├── train_model.py
-│   ├── compute_embeddings.py
-│   └── chatbot_service.py
-├── app/                      # Streamlit frontends
-│   ├── streamlit_app.py     # ML API
-│   └── streamlit_chat.py    # Chat UI
-├── Dockerfile.train          # training container
-├── Dockerfile.inference      # ML API container
-├── Dockerfile.chatbot        # chatbot container
-├── docker-compose.yml        # full‑stack Compose
-├── requirements.txt          # Python deps for training & API
-├── requirements_airflow.txt  # Python deps for Airflow DAGs
-├── .gitignore
-└── README.md
+├── dags/                       # Airflow DAG definitions
+├── scripts/                    # Utilities: log extraction, evaluation, helpers
+├── static/ & templates/        # Flask dashboard UI
+├── Dockerfile.chatbot          # Builds RAG chatbot image
+├── docker-compose.yml          # Orchestrates Airflow + Chatbot
+├── app.py                      # Flask RAG API & Langfuse integration
+├── dashboard.py                # Flask UI server
+├── dataset_processor.py        # Validation, cleaning, merging & embedding logic
+├── ingest_metadata.py          # Metadata ingestion
+├── ingest_reviews.py           # Review ingestion
+├── process_dataset_cli.py      # CLI wrapper around dataset_processor
+├── webserver_config.py         # Config (.env loader, OpenAI, Langfuse, GCS)
+├── requirements.txt            # Python deps
+├── airflow.cfg & airflow.db    # Airflow config & metadata DB
+└── .env.example                # Copy to `.env` and fill in secrets
 ```
 
 ---
 
-## Prerequisites
+## Getting Started
 
-- Docker & Docker Compose  
-- (Optional) Python 3.10+ & virtualenv for local testing  
-- An OpenAI API key (for the chatbot)
+1. **Clone & configure**  
+   ```bash
+   git clone <repo-url>
+   cd <repo>
+   cp .env.example .env
+   # Fill in OPENAI_API_KEY, LANGFUSE_DSN, CHROMA_DB_DIR, etc.
+   ```
+
+2. **Install / Dockerize**  
+   - **Local Python**  
+     ```bash
+     pip install -r requirements.txt
+     airflow db init
+     ```
+   - **Docker Compose**  
+     ```bash
+     docker-compose up --build -d
+     ```
+
+3. **Airflow UI** → `http://localhost:8080`  
+   - Trigger DAGs: metadata → reviews → processing → embeddings  
+
+4. **Dashboard & API** →  
+   - API: `http://localhost:5000`  
+   - UI:  `http://localhost:5001`
+
+5. **Monitor & Evaluate**  
+   - View Langfuse dashboard  
+   - Run evaluation scripts in `scripts/`
 
 ---
 
-## Local Development
+## 🤝 Contributing
 
-1. **Clone & .gitignore**  
-   ```bash
-   git clone https://github.com/<YOUR‑USER>/amazon-automotive-mlops.git
-   cd amazon-automotive-mlops
-   ```
-
-2. **(Optional) Python venv**  
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate
-   pip install -r requirements.txt
-   ```
-
-3. **Run ingestion & training**  
-   ```bash
-   python scripts/ingest_reviews.py
-   python scripts/ingest_metadata.py
-   python scripts/preprocess.py
-   python scripts/train_model.py
-   python scripts/compute_embeddings.py
-   ```
-
-4. **Test chatbot locally**  
-   ```bash
-   export OPENAI_API_KEY="sk-..."
-   python scripts/chatbot_service.py
-   curl -X POST http://127.0.0.1:5001/chat \
-     -H "Content-Type: application/json" \
-     -d '{"query":"Which automotive battery has the highest rating?"}'
-   ```
-
----
-
-## Docker‑Compose Full Stack
-
-Bring up **Airflow**, **ML API**, and **Chatbot** together:
-
-1. **Set your OpenAI key**  
-   ```bash
-   export OPENAI_API_KEY="sk-..."
-   ```
-
-2. **Tear down & rebuild**  
-   ```bash
-   docker-compose down
-   docker-compose up --build -d
-   ```
-
-3. **Verify services**  
-   - **Airflow UI** → http://localhost:8080  
-     - Login: `admin` / `admin`  
-     - No “scheduler” banner  
-     - Trigger DAGs from the UI  
-   - **ML API** → http://localhost:8501  
-   - **Chatbot UI** → http://localhost:8502  
-   - **Chat API** → http://localhost:5001/chat  
-
----
-
-## Workflow Overview
-
-1. **Airflow DAGs**  
-   - **data_pipeline**: ingest → preprocess  
-   - **model_pipeline**: train → evaluate  
-   - **deploy_pipeline**: package → serve  
-   - **chatbot_pipeline**: embed → index refresh  
-
-2. **Streamlit ML API** serves regression predictions.  
-3. **Chatbot** uses FAISS + OpenAI for Q&A.  
-
-Re‑trigger any DAG in Airflow to re‑run that pipeline stage.
-
----
+1. Fork & branch (`feat/...`, `fix/...`)  
+2. Commit with descriptive messages  
+3. Open a PR → Review → Merge  
